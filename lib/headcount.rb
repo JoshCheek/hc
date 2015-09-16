@@ -9,8 +9,9 @@ class ParseCsv
 
   def parse
     @repo_data ||= Hash.new.tap do |repo_data|
-      parse_pupil_enrollments repo_data
-      parse_graduation_rates  repo_data
+      parse_pupil_enrollments   repo_data
+      parse_graduation_rates    repo_data
+      parse_testing_proficiency repo_data
     end
   end
 
@@ -32,11 +33,37 @@ class ParseCsv
       }
   end
 
+  def parse_testing_proficiency(repo_data)
+    [ '3rd grade students scoring proficient or above on the CSAP_TCAP.csv',
+      # '4th grade students scoring proficient or advanced on CSAP_TCAP.csv',
+      '8th grade students scoring proficient or above on the CSAP_TCAP.csv',
+    ].each do |filename|
+      csv_data_from(filename)
+        .group_by { |e| e[:location] }
+        .each { |district_name, rows|
+          formatted_rows = rows.map { |row|
+            { subject:     row.fetch(:score).downcase.to_sym,
+              grade:       filename.to_i,
+              year:        row.fetch(:timeframe).to_i,
+              proficiency: row.fetch(:data).to_f,
+            }
+          }
+          testing = district_for(repo_data, district_name).fetch :testing
+          testing.fetch(:by_subject_grade_and_year).concat(formatted_rows)
+        }
+    end
+  end
+
   def district_for(repo_data, district_name)
     repo_data[district_name] ||= {
+      name:       district_name,
+      testing:    {
+        by_subject_grade_and_year: []
+      },
       enrollment: {
-        graduation_rate: {}
-      }
+        graduation_rate: {
+        }
+      },
     }
   end
 
@@ -65,10 +92,12 @@ end
 
 
 class District
-  attr_reader :name, :enrollment
+  attr_reader :name, :enrollment, :statewide_testing
+
   def initialize(name, data)
-    @name       = name
-    @enrollment = Enrollment.new data[:enrollment]
+    @name              = name
+    @enrollment        = Enrollment.new data.fetch(:enrollment)
+    @statewide_testing = StatewideTesting.new data.fetch(:testing)
   end
 end
 
@@ -92,5 +121,20 @@ class GraduationRate
 
   def for_high_school_in_year(year)
     @data.fetch(:for_high_school_in_year).fetch(year)
+  end
+end
+
+class StatewideTesting
+  def initialize(data)
+    @data = data
+  end
+
+  def proficient_for_subject_by_grade_in_year(subject, grade, year)
+    @data.fetch(:by_subject_grade_and_year)
+         .find { |data|
+            subject == data[:subject] &&
+              grade ==   data[:grade] &&
+              year  ==   data[:year]
+         }.fetch(:proficiency)
   end
 end
