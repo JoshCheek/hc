@@ -1,6 +1,6 @@
 require_relative 'test_helper'
 
-class TestLoadingDistricts < TestHarness
+class TestLoadingDistricts < IntegrationTests
   def test_knows_all_the_enrollment_data
     district = repo.find_by_name("ACADEMY 20")
     assert_equal 22620, district.enrollment.in_year(2009)
