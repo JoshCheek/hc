@@ -174,14 +174,14 @@ class StatewideTesting
   def proficient_for_subject_by_grade_in_year(subject, grade, year)
     records = @data.fetch(:by_subject_year_and_grade)
     validate! grade: grade, subject: subject, year: year, records: records
-    records.find { |data| subject == data[:subject] && grade == data[:grade] && year == data[:year] }
+    records.find { |record| subject == record[:subject] && grade == record[:grade] && year == record[:year] }
            .fetch(:proficiency)
   end
 
   def proficient_for_subject_by_race_in_year(subject, race, year)
     records = @data.fetch(:by_subject_year_and_race)
     validate! subject: subject, race: race, year: year, records: records
-    records.find { |data| subject == data[:subject] && race == data[:race] && year == data[:year] }
+    records.find { |record| subject == record[:subject] && race == record[:race] && year == record[:year] }
            .fetch(:proficiency)
   end
 
@@ -189,7 +189,7 @@ class StatewideTesting
   def proficient_for_subject_in_year(subject, year)
     records = @data.fetch(:by_subject_year_and_race)
     validate! subject: subject, year: year, records: records
-    records.find { |data| subject == data[:subject] && :all_students == data[:race] && year == data[:year] }
+    records.find { |record| subject == record[:subject] && :all_students == record[:race] && year == record[:year] }
            .fetch(:proficiency)
   end
 
@@ -199,8 +199,8 @@ class StatewideTesting
       .fetch(:by_subject_year_and_race)
       .select   { |r| r.fetch(:race) == race }
       .group_by { |r| r.fetch :year }
-      .map { |year, data|
-        proficiencies = data.map { |datum| [datum.fetch(:subject), datum.fetch(:proficiency)] }.to_h
+      .map { |year, record|
+        proficiencies = record.map { |datum| [datum.fetch(:subject), datum.fetch(:proficiency)] }.to_h
         [year, proficiencies]
       }.to_h
     result
