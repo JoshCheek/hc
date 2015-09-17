@@ -88,6 +88,11 @@ class DistrictRepository
   def find_by_name(name)
     districts[name.downcase]
   end
+
+  def find_all_matching(fragment)
+    fragment = fragment.downcase
+    districts.select { |name, district| name.include? fragment }.map(&:last)
+  end
 end
 
 
