@@ -161,7 +161,7 @@ class StatewideTesting
   end
 
   def proficient_by_grade(grade)
-    validate_grade! grade
+    validate! grade: grade
     @data.fetch(:by_subject_year_and_grade)
          .select { |datum| datum[:grade] == grade }
          .group_by { |datum| datum[:year] }
@@ -173,18 +173,14 @@ class StatewideTesting
 
   def proficient_for_subject_by_grade_in_year(subject, grade, year)
     records = @data.fetch(:by_subject_year_and_grade)
-    validate_grade!   grade
-    validate_subject! subject
-    validate_year!    year, records
+    validate! grade: grade, subject: subject, year: year, records: records
     records.find { |data| subject == data[:subject] && grade == data[:grade] && year == data[:year] }
            .fetch(:proficiency)
   end
 
   def proficient_for_subject_by_race_in_year(subject, race, year)
     records = @data.fetch(:by_subject_year_and_race)
-    validate_subject! subject
-    validate_race!    race
-    validate_year!    year, records
+    validate! subject: subject, race: race, year: year, records: records
     records.find { |data| subject == data[:subject] && race == data[:race] && year == data[:year] }
            .fetch(:proficiency)
   end
@@ -192,14 +188,13 @@ class StatewideTesting
 
   def proficient_for_subject_in_year(subject, year)
     records = @data.fetch(:by_subject_year_and_race)
-    validate_subject! subject
-    validate_year!    year, records
+    validate! subject: subject, year: year, records: records
     records.find { |data| subject == data[:subject] && :all_students == data[:race] && year == data[:year] }
            .fetch(:proficiency)
   end
 
   def proficient_by_race_or_ethnicity(race)
-    validate_race! race
+    validate! race: race
     result = @data
       .fetch(:by_subject_year_and_race)
       .select   { |r| r.fetch(:race) == race }
@@ -211,24 +206,18 @@ class StatewideTesting
     result
   end
 
-  def validate_grade!(grade, domain=[3, 8])
-    return if domain.include?(grade)
-    raise(UnknownDataError, "#{grade.inspect} is not in the accepted domain: #{domain.inspect}")
-  end
-
-  def validate_race!(race, domain=[:asian, :black, :pacific_islander, :hispanic, :native_american, :two_or_more, :white])
-    return if domain.include?(race)
-    raise(UnknownDataError, "#{race.inspect} is not in the accepted domain: #{domain.inspect}")
-  end
-
-  def validate_subject!(subject, domain = [:math, :reading, :writing])
-    return if domain.include?(subject)
-    raise(UnknownDataError, "#{subject.inspect} is not in the accepted domain: #{domain.inspect}")
-  end
-
-  def validate_year!(year, records)
-    domain = records.map { |record| record.fetch(:year) }.uniq.sort
-    return if domain.include?(year)
-    raise(UnknownDataError, "#{year.inspect} is not in the accepted domain: #{domain.inspect}")
+  def validate!(validations)
+    records = validations.delete :records
+    validations.each do |type, value|
+      domain = case type
+      when :grade   then [3, 8]
+      when :race    then [:asian, :black, :pacific_islander, :hispanic, :native_american, :two_or_more, :white]
+      when :subject then [:math, :reading, :writing]
+      when :year    then records.map { |record| record.fetch(:year) }.uniq.sort
+      else raise "WAT: #{type.inspect}"
+      end
+      domain.include?(value) ||
+        raise(UnknownDataError, "#{value.inspect} is not in the accepted domain: #{domain.inspect}")
+    end
   end
 end
