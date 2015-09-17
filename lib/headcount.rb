@@ -100,7 +100,7 @@ class District
   attr_reader :name, :enrollment, :statewide_testing
 
   def initialize(name, data)
-    @name              = name
+    @name              = name.upcase
     @enrollment        = Enrollment.new data.fetch(:enrollment)
     @statewide_testing = StatewideTesting.new data.fetch(:testing)
   end
