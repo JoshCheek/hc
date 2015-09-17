@@ -82,11 +82,11 @@ class DistrictRepository
   attr_reader :districts
 
   def initialize(data)
-    @districts = data.map { |name, district_data| [name, District.new(name, district_data)] }.to_h
+    @districts = data.map { |name, district_data| [name.downcase, District.new(name, district_data)] }.to_h
   end
 
   def find_by_name(name)
-    districts.fetch name
+    districts[name.downcase]
   end
 end
 
