@@ -1,5 +1,8 @@
 require 'csv'
 
+class UnknownDataError < StandardError
+end
+
 class ParseCsv
   attr_accessor :data_dir
 
@@ -9,9 +12,10 @@ class ParseCsv
 
   def parse
     @repo_data ||= Hash.new.tap do |repo_data|
-      parse_pupil_enrollments   repo_data
-      parse_graduation_rates    repo_data
-      parse_testing_proficiency repo_data
+      parse_pupil_enrollments            repo_data
+      parse_graduation_rates             repo_data
+      parse_testing_proficiency_by_grade repo_data
+      parse_testing_proficiency_by_race  repo_data
     end
   end
 
@@ -33,9 +37,8 @@ class ParseCsv
       }
   end
 
-  def parse_testing_proficiency(repo_data)
+  def parse_testing_proficiency_by_grade(repo_data)
     [ '3rd grade students scoring proficient or above on the CSAP_TCAP.csv',
-      # '4th grade students scoring proficient or advanced on CSAP_TCAP.csv',
       '8th grade students scoring proficient or above on the CSAP_TCAP.csv',
     ].each do |filename|
       csv_data_from(filename)
@@ -45,11 +48,33 @@ class ParseCsv
             { subject:     row.fetch(:score).downcase.to_sym,
               grade:       filename.to_i,
               year:        row.fetch(:timeframe).to_i,
-              proficiency: row.fetch(:data).to_f,
+              proficiency: row.fetch(:data).to_f.round(3),
             }
           }
           testing = district_for(repo_data, district_name).fetch :testing
-          testing.fetch(:by_subject_grade_and_year).concat(formatted_rows)
+          testing.fetch(:by_subject_year_and_grade).concat(formatted_rows)
+        }
+    end
+  end
+
+  def parse_testing_proficiency_by_race(repo_data)
+    [ ['Average proficiency on the CSAP_TCAP by race_ethnicity_ Math.csv',    :math],
+      ['Average proficiency on the CSAP_TCAP by race_ethnicity_ Reading.csv', :reading],
+      ['Average proficiency on the CSAP_TCAP by race_ethnicity_ Writing.csv', :writing],
+    ].each do |filename, subject|
+      csv_data_from(filename)
+        .group_by { |e| e[:location] }
+        .each { |district_name, rows|
+          formatted_rows = rows.map { |row|
+            race = row.fetch(:race_ethnicity).downcase.gsub(/\W/, "_").gsub("hawaiian_", "").to_sym
+            { subject:     subject,
+              year:        row.fetch(:timeframe).to_i,
+              race:        race,
+              proficiency: row.fetch(:data).to_f.round(3),
+            }
+          }
+          testing = district_for(repo_data, district_name).fetch :testing
+          testing.fetch(:by_subject_year_and_race).concat(formatted_rows)
         }
     end
   end
@@ -58,7 +83,8 @@ class ParseCsv
     repo_data[district_name] ||= {
       name:       district_name,
       testing:    {
-        by_subject_grade_and_year: []
+        by_subject_year_and_grade: [],
+        by_subject_year_and_race:  [],
       },
       enrollment: {
         graduation_rate: {
@@ -134,12 +160,85 @@ class StatewideTesting
     @data = data
   end
 
+  def proficient_by_grade(grade)
+    domain = [3, 8]
+    domain.include?(grade) ||
+      raise(UnknownDataError, "#{grade.inspect} is not in the accepted domain: #{domain.inspect}")
+
+    @data.fetch(:by_subject_year_and_grade)
+         .select { |datum| datum[:grade] == grade }
+         .group_by { |datum| datum[:year] }
+         .map { |year, data|
+           proficiencies = data.map { |datum| [datum.fetch(:subject), datum.fetch(:proficiency)] }.to_h
+           [year, proficiencies]
+         }.to_h
+  end
+
   def proficient_for_subject_by_grade_in_year(subject, grade, year)
-    @data.fetch(:by_subject_grade_and_year)
-         .find { |data|
-            subject == data[:subject] &&
-              grade ==   data[:grade] &&
-              year  ==   data[:year]
-         }.fetch(:proficiency)
+    domain = [3, 8]
+    domain.include?(grade) ||
+      raise(UnknownDataError, "#{grade.inspect} is not in the accepted domain: #{domain.inspect}")
+
+    domain = [:math, :reading, :writing]
+    domain.include?(subject) ||
+      raise(UnknownDataError, "#{subject.inspect} is not in the accepted domain: #{domain.inspect}")
+
+    records = @data.fetch(:by_subject_year_and_grade)
+
+    domain = records.map { |record| record.fetch(:year) }.uniq.sort
+    domain.include?(year) ||
+      raise(UnknownDataError, "#{year.inspect} is not in the accepted domain: #{domain.inspect}")
+
+    records.find { |data| subject == data[:subject] && grade == data[:grade] && year == data[:year] }
+           .fetch(:proficiency)
+  end
+
+  def proficient_for_subject_by_race_in_year(subject, race, year)
+    domain = [:asian, :black, :pacific_islander, :hispanic, :native_american, :two_or_more, :white]
+    domain.include?(race) ||
+      raise(UnknownDataError, "#{race.inspect} is not in the accepted domain: #{domain.inspect}")
+
+    domain = [:math, :reading, :writing]
+    domain.include?(subject) ||
+      raise(UnknownDataError, "#{subject.inspect} is not in the accepted domain: #{domain.inspect}")
+
+    records = @data.fetch(:by_subject_year_and_race)
+
+    domain = records.map { |record| record.fetch(:year) }.uniq.sort
+    domain.include?(year) ||
+      raise(UnknownDataError, "#{year.inspect} is not in the accepted domain: #{domain.inspect}")
+
+    records.find { |data| subject == data[:subject] && race == data[:race] && year == data[:year] }
+           .fetch(:proficiency)
+  end
+
+  def proficient_for_subject_in_year(subject, year)
+    domain = [:math, :reading, :writing]
+    domain.include?(subject) ||
+      raise(UnknownDataError, "#{subject.inspect} is not in the accepted domain: #{domain.inspect}")
+
+    records = @data.fetch(:by_subject_year_and_race)
+
+    domain = records.map { |record| record.fetch(:year) }.uniq.sort
+    domain.include?(year) ||
+      raise(UnknownDataError, "#{year.inspect} is not in the accepted domain: #{domain.inspect}")
+
+    records.find { |data| subject == data[:subject] && :all_students == data[:race] && year == data[:year] }
+           .fetch(:proficiency)
+  end
+
+  def proficient_by_race_or_ethnicity(race)
+    domain = [:asian, :black, :pacific_islander, :hispanic, :native_american, :two_or_more, :white]
+    domain.include?(race) ||
+      raise(UnknownDataError, "#{race.inspect} is not in the accepted domain: #{domain.inspect}")
+    result = @data
+      .fetch(:by_subject_year_and_race)
+      .select   { |r| r.fetch(:race) == race }
+      .group_by { |r| r.fetch :year }
+      .map { |year, data|
+        proficiencies = data.map { |datum| [datum.fetch(:subject), datum.fetch(:proficiency)] }.to_h
+        [year, proficiencies]
+      }.to_h
+    result
   end
 end
