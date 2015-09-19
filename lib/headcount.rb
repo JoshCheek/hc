@@ -33,7 +33,7 @@ class ParseCsv
       .group_by { |e| e[:location] }
       .each { |district_name, rows|
         district_for(repo_data, district_name)[:enrollment][:graduation_rate][:for_high_school_in_year] =
-          rows.map { |row| [row[:timeframe].to_i, row[:data].to_f] }.to_h
+          rows.map { |row| [row[:timeframe].to_i, percentage(row[:data])] }.to_h
       }
   end
 
@@ -48,7 +48,7 @@ class ParseCsv
             { subject:     row.fetch(:score).downcase.to_sym,
               grade:       filename.to_i,
               year:        row.fetch(:timeframe).to_i,
-              proficiency: row.fetch(:data).to_f.round(3),
+              proficiency: percentage(row.fetch :data),
             }
           }
           testing = district_for(repo_data, district_name).fetch :testing
@@ -70,7 +70,7 @@ class ParseCsv
             { subject:     subject,
               year:        row.fetch(:timeframe).to_i,
               race:        race,
-              proficiency: row.fetch(:data).to_f.round(3),
+              proficiency: percentage(row.fetch :data),
             }
           }
           testing = district_for(repo_data, district_name).fetch :testing
@@ -96,6 +96,10 @@ class ParseCsv
   def csv_data_from(filename)
     filename = File.join data_dir, filename
     CSV.read(filename, headers: true, header_converters: :symbol).map(&:to_h)
+  end
+
+  def percentage(n)
+    (n.to_f * 1000).to_i / 1000.0
   end
 end
 
