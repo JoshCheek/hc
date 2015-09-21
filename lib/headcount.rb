@@ -31,7 +31,19 @@ class ParseCsv
       parse_pupil_enrollment_by_race           repo_data
       parse_special_education_by_year          repo_data
       parse_remediation_by_year                repo_data
+      parse_economic_reduced_lunch_by_year     repo_data
     end
+  end
+
+  def parse_economic_reduced_lunch_by_year(repo_data)
+    csv_data_from('Students qualifying for free or reduced price lunch.csv')
+      .group_by { |e| e.fetch :location }
+      .each { |district_name, rows|
+        district_for(repo_data, district_name)[:economic_profile][:free_or_reduced_lunch_by_year] =
+          rows.select { |row| row.fetch(:dataformat) == 'Percent' }
+              .map    { |row| [row.fetch(:timeframe).to_i, percentage(row.fetch :data)] }
+              .to_h
+      }
   end
 
   def parse_remediation_by_year(repo_data)
@@ -161,7 +173,6 @@ class ParseCsv
       .group_by { |e| e.fetch :location }
       .each { |district_name, rows|
         formatted_rows = rows.map { |row|
-          # {:location=>"Colorado", :category=>"Female Students", :timeframe=>"2011", :dataformat=>"Percent", :data=>"0.028"},
           { year:     row.fetch(:timeframe).to_i,
             rate:     percentage(row.fetch :data),
             category: category(row.fetch :category),
@@ -181,6 +192,8 @@ class ParseCsv
       },
       enrollment: {
         dropout_rates: [],
+      },
+      economic_profile: {
       },
     }
   end
@@ -219,12 +232,13 @@ end
 
 
 class District
-  attr_reader :name, :enrollment, :statewide_testing
+  attr_reader :name, :enrollment, :statewide_testing, :economic_profile
 
   def initialize(name, data)
     @name              = name.upcase
-    @enrollment        = Enrollment.new data.fetch(:enrollment)
+    @enrollment        = Enrollment.new       data.fetch(:enrollment)
     @statewide_testing = StatewideTesting.new data.fetch(:testing)
+    @economic_profile  = EconomicProfile.new  data.fetch(:economic_profile)
   end
 end
 
@@ -396,5 +410,17 @@ class StatewideTesting
       domain.include?(value) ||
         raise(UnknownDataError, "#{value.inspect} is not in the accepted domain: #{domain.inspect}")
     end
+  end
+end
+
+
+class EconomicProfile
+  attr_accessor :free_or_reduced_lunch_by_year
+  def initialize(data)
+    @free_or_reduced_lunch_by_year = data.fetch :free_or_reduced_lunch_by_year
+  end
+
+  def free_or_reduced_lunch_in_year(year)
+    free_or_reduced_lunch_by_year[year]
   end
 end
