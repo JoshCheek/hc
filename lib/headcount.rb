@@ -32,7 +32,37 @@ class ParseCsv
       parse_special_education_by_year          repo_data
       parse_remediation_by_year                repo_data
       parse_economic_reduced_lunch_by_year     repo_data
+      parse_median_household_income            repo_data
+      parse_school_aged_children_in_poverty    repo_data
+      parse_title_1_students                   repo_data
     end
+  end
+
+  def parse_median_household_income(repo_data)
+    csv_data_from('Median household income.csv')
+      .group_by { |e| e.fetch :location }
+      .each { |district_name, rows|
+        district_for(repo_data, district_name)[:economic_profile][:median_household_income] =
+          rows.map { |row| [row.fetch(:timeframe).split("-").map(&:to_i), row.fetch(:data).to_i] }.to_h
+      }
+  end
+
+  def parse_school_aged_children_in_poverty(repo_data)
+    csv_data_from('School-aged children in poverty.csv')
+      .group_by { |e| e.fetch :location }
+      .each { |district_name, rows|
+        district_for(repo_data, district_name)[:economic_profile][:school_aged_children_in_poverty_by_year] =
+          rows.map { |row| [row.fetch(:timeframe).to_i, percentage(row.fetch :data)] }.to_h
+      }
+  end
+
+  def parse_title_1_students(repo_data)
+    csv_data_from('Title I students.csv')
+      .group_by { |e| e.fetch :location }
+      .each { |district_name, rows|
+        district_for(repo_data, district_name)[:economic_profile][:title_1_students_by_year] =
+          rows.map { |row| [row.fetch(:timeframe).to_i, percentage(row.fetch :data)] }.to_h
+      }
   end
 
   def parse_economic_reduced_lunch_by_year(repo_data)
@@ -184,6 +214,7 @@ class ParseCsv
   end
 
   def district_for(repo_data, district_name)
+    district_name = district_name.upcase
     repo_data[district_name] ||= {
       name:       district_name,
       testing:    {
@@ -415,12 +446,23 @@ end
 
 
 class EconomicProfile
-  attr_accessor :free_or_reduced_lunch_by_year
+  attr_accessor :title_1_students_by_year, :free_or_reduced_lunch_by_year, :school_aged_children_in_poverty_by_year
+
   def initialize(data)
-    @free_or_reduced_lunch_by_year = data.fetch :free_or_reduced_lunch_by_year
+    @title_1_students_by_year                = data.fetch :title_1_students_by_year
+    @free_or_reduced_lunch_by_year           = data.fetch :free_or_reduced_lunch_by_year
+    @school_aged_children_in_poverty_by_year = data.fetch :school_aged_children_in_poverty_by_year, {}
   end
 
   def free_or_reduced_lunch_in_year(year)
     free_or_reduced_lunch_by_year[year]
+  end
+
+  def school_aged_children_in_poverty_in_year(year)
+    school_aged_children_in_poverty_by_year[year]
+  end
+
+  def title_1_students_in_year(year)
+    title_1_students_by_year[year]
   end
 end
