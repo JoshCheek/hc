@@ -1,4 +1,6 @@
 require 'csv'
+require 'headcount_analyst'
+require 'data_formatting'
 
 class UnknownDataError < StandardError
 end
@@ -12,7 +14,10 @@ end
 
 KNOWN_RACES = [:asian, :black, :pacific_islander, :hispanic, :native_american, :two_or_more, :white].freeze
 
+
 class ParseCsv
+  include DataFormatting
+
   attr_accessor :data_dir
 
   def initialize(data_dir)
@@ -151,6 +156,7 @@ class ParseCsv
         .group_by { |e| e[:location] }
         .each { |district_name, rows|
           formatted_rows = rows.map { |row|
+            next unless percentageable? row.fetch(:data)
             { subject:     row.fetch(:score).downcase.to_sym,
               grade:       filename.to_i,
               year:        row.fetch(:timeframe).to_i,
@@ -158,7 +164,7 @@ class ParseCsv
             }
           }
           testing = district_for(repo_data, district_name).fetch :testing
-          testing.fetch(:by_subject_year_and_grade).concat(formatted_rows)
+          testing.fetch(:by_subject_year_and_grade).concat(formatted_rows.compact)
         }
     end
   end
@@ -235,10 +241,6 @@ class ParseCsv
     filename = File.join data_dir, filename
     CSV.read(filename, headers: true, header_converters: :symbol).map(&:to_h)
   end
-
-  def percentage(n)
-    (n.to_f * 1000).to_i / 1000.0
-  end
 end
 
 
@@ -247,19 +249,23 @@ class DistrictRepository
     new ParseCsv.new(data_dir).parse
   end
 
-  attr_reader :districts
+  attr_reader :districts_by_name
 
   def initialize(data)
-    @districts = data.map { |name, district_data| [name.downcase, District.new(name, district_data)] }.to_h
+    @districts_by_name = data.map { |name, district_data| [name.downcase, District.new(name, district_data)] }.to_h
   end
 
   def find_by_name(name)
-    districts[name.downcase]
+    districts_by_name[name.downcase]
   end
 
   def find_all_matching(fragment)
     fragment = fragment.downcase
-    districts.select { |name, district| name.include? fragment }.map(&:last)
+    districts_by_name.select { |name, district| name.include? fragment }.map(&:last)
+  end
+
+  def districts
+    districts_by_name.values
   end
 end
 
@@ -443,6 +449,18 @@ class StatewideTesting
       domain.include?(value) ||
         raise(UnknownDataError, "#{value.inspect} is not in the accepted domain: #{domain.inspect}")
     end
+  end
+
+  def average_growth(grade, subject)
+    min, max = @data.fetch(:by_subject_year_and_grade)
+                    .select { |idk| idk.fetch(:grade) == grade && idk.fetch(:subject) == subject }
+                    .minmax_by { |idfk| idfk.fetch :year }
+
+    return nil if !min || min == max
+
+    difference      = max.fetch(:proficiency) - min.fetch(:proficiency)
+    number_of_years = max.fetch(:year) - min.fetch(:year)
+    difference / number_of_years
   end
 end
 
