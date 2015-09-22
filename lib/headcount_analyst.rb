@@ -1,4 +1,5 @@
 require 'data_formatting'
+require 'data_formatting'
 
 class HeadcountAnalyst
   include DataFormatting
