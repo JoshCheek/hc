@@ -63,7 +63,9 @@ class ParseCsv
       .group_by { |e| e.fetch :location }
       .each { |district_name, rows|
         district_for(repo_data, district_name)[:economic_profile][:free_or_reduced_lunch_by_year] =
-          rows.select { |row| row.fetch(:dataformat) == 'Percent' }
+          rows.select { |row| row.fetch(:dataformat) == 'Percent' &&
+                        row.fetch(:poverty_level) == 'Eligible for Free or Reduced Lunch'
+        }
               .map    { |row| [row.fetch(:timeframe).to_i, percentage(row.fetch :data)] }
               .to_h
       }
