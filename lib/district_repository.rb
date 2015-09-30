@@ -21,6 +21,23 @@ class ParseJson
     data.each do |district_name, data|
       data[:testing] = data.delete :statewide_testing
     end
+
+    data.each do |district_name, data|
+      data[:enrollment][:kindergarten_participation_by_year] =
+        data[:enrollment][:kindergarten_participation_by_year]
+          .map { |key, value| [key.to_s.to_i, value] }
+          .to_h
+    end
+    data.each do |district_name, data|
+      data[:enrollment][:participation_by_year] =
+        data[:enrollment][:participation_by_year]
+          .map { |key, value| [key.to_s.to_i, value] }
+          .to_h
+    end
+    data.each do |district_name, data|
+      data[:testing][:by_subject_year_and_grade]
+        .each { |record| record[:subject]= record[:subject].to_sym }
+    end
     @data
   end
 end

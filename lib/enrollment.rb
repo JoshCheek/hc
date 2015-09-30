@@ -49,10 +49,6 @@ class Enrollment
     graduation_rate_by_year[year]
   end
 
-  def participation_in_year(year)
-    participation_by_year[year]
-  end
-
   def dropout_rate_in_year(year)
     rate = dropout_rate_by(year: year, category: :all).first
     rate && rate.fetch(:rate)
