@@ -12,33 +12,46 @@ class ParseJson
     @data = data
   end
 
+  def values_to_sym(hashes, key)
+    hashes.each do |hash|
+      hash[key] = hash[key].to_sym
+    end
+  end
+
   def parse
     @data = JSON.parse(@data, :symbolize_names=>true)
     @data = data.map do |district_name, data|
+      testing = data.delete :statewide_testing
+      data[:testing] = testing
+      values_to_sym testing[:by_subject_year_and_grade], :subject
+      values_to_sym testing[:by_subject_year_and_race],  :subject
+      values_to_sym testing[:by_subject_year_and_race],  :race
+
+      economic_profile = data[:economic_profile]
+      enrollment       = data[:enrollment]
+
+      keys_to_int economic_profile, :title_1_students_by_year
+      keys_to_int economic_profile, :free_or_reduced_lunch_by_year
+      keys_to_int economic_profile, :school_aged_children_in_poverty_by_year
+
+      keys_to_int enrollment,       :remediation_by_year
+      keys_to_int enrollment,       :participation_by_year
+      keys_to_int enrollment,       :graduation_rate_by_year
+      keys_to_int enrollment,       :special_education_by_year
+      keys_to_int enrollment,       :online_participation_by_year
+      keys_to_int enrollment,       :kindergarten_participation_by_year
+
+      values_to_sym enrollment[:dropout_rates], :category
+      values_to_sym enrollment[:participation_by_race_and_year], :race
+
       [district_name.to_s, data]
     end.to_h
 
-    data.each do |district_name, data|
-      data[:testing] = data.delete :statewide_testing
-    end
-
-    data.each do |district_name, data|
-      data[:enrollment][:kindergarten_participation_by_year] =
-        data[:enrollment][:kindergarten_participation_by_year]
-          .map { |key, value| [key.to_s.to_i, value] }
-          .to_h
-    end
-    data.each do |district_name, data|
-      data[:enrollment][:participation_by_year] =
-        data[:enrollment][:participation_by_year]
-          .map { |key, value| [key.to_s.to_i, value] }
-          .to_h
-    end
-    data.each do |district_name, data|
-      data[:testing][:by_subject_year_and_grade]
-        .each { |record| record[:subject]= record[:subject].to_sym }
-    end
     @data
+  end
+
+  def keys_to_int(hash, key)
+    hash[key] = hash[key].map { |key, value| [key.to_s.to_i, value] }.to_h
   end
 end
 
